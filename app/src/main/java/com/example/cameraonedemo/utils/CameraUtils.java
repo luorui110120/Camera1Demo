@@ -1,9 +1,13 @@
 package com.example.cameraonedemo.utils;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
@@ -11,6 +15,15 @@ import android.os.Build;
 import android.view.Surface;
 
 import androidx.annotation.RequiresApi;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class CameraUtils {
 
@@ -174,5 +187,82 @@ public class CameraUtils {
         }
 
         return result;
+    }
+
+
+    public static Bitmap  getPriviewPic(byte[] data, int w, int h) {//这里传入的data参数就是onpreviewFrame中需要传入的byte[]型数据
+        BitmapFactory.Options newOpts = new BitmapFactory.Options();
+        newOpts.inJustDecodeBounds = true;
+        YuvImage yuvimage = new YuvImage(
+                data,
+                ImageFormat.NV21,
+                w,
+                h,
+                null);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        yuvimage.compressToJpeg(new Rect(0, 0, w, h), 100, baos);// 80--JPG图片的质量[0-100],100最高
+        byte[] rawImage = baos.toByteArray();
+        //将rawImage转换成bitmap
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inPreferredConfig = Bitmap.Config.RGB_565;
+        Bitmap bitmap = BitmapFactory.decodeByteArray(rawImage, 0, rawImage.length, options);
+        return bitmap;
+    }
+
+    // 获取当前目录下所文件
+    public static  List<String> getEnumDirFileName(String fileDir, String strType) {
+        List<String> pathList = new ArrayList<String>();
+        File file = new File(fileDir);
+        File[] subFile = file.listFiles();
+
+        for (int iFileLength = 0; iFileLength < subFile.length; iFileLength++) {
+            // 判断是否为文件夹
+            if (!subFile[iFileLength].isDirectory()) {
+                String filename = subFile[iFileLength].getName();
+                // 判断是否为MP4结尾
+                if(strType == null){
+                    pathList.add(subFile[iFileLength].getAbsolutePath());
+                }
+                else if(filename.trim().toLowerCase().endsWith(strType)){
+                    pathList.add(subFile[iFileLength].getAbsolutePath());
+                }
+            }
+        }
+        Collections.sort(pathList);
+        return pathList;
+    }
+
+    public static  byte[] readFileToByteArray(String path) {
+        File file = new File(path);
+        if(!file.exists()) {
+            return null;
+        }
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+            long inSize = in.getChannel().size();//判断FileInputStream中是否有内容
+            if (inSize == 0) {
+                return null;
+            }
+
+            byte[] buffer = new byte[in.available()];//in.available() 表示要读取的文件中的数据长度
+            in.read(buffer);  //将文件中的数据读到buffer中
+            return buffer;
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            try {
+                if(null != in){
+                    in.close();
+                }
+            } catch (IOException e) {
+                return null;
+            }
+            //或IoUtils.closeQuietly(in);
+        }
     }
 }

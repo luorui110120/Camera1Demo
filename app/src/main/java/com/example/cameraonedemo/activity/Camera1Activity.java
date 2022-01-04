@@ -12,6 +12,7 @@ import android.graphics.Rect;
 import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -27,10 +28,17 @@ import com.example.cameraonedemo.R;
 import com.example.cameraonedemo.camera.common.BaseCameraContext;
 import com.example.cameraonedemo.encoder.VideoEncoder;
 import com.example.cameraonedemo.utils.AutoFitSurfaceView;
+import com.example.cameraonedemo.utils.CameraUtils;
+import com.example.cameraonedemo.utils.Mp4ToNV21;
 import com.example.cameraonedemo.view.FaceView;
 import com.example.cameraonedemo.view.FocusMeteringView;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -42,11 +50,17 @@ public class Camera1Activity extends BaseActivity
     private static final int MSG_UPDATE_RECORDING_STATUS = 1001;
     private static final int MSG_UPDATE_CODEC_STATUS = 1002;
     private static final int MSG_TOUCH_AF_LOCK_TIME_OUT = 5000;
+    ///////
+    private int mNV21Index = 0;
+    private List<String> mRelNV21List;
+    public static Mp4ToNV21 mMp4Obj;
+    //////
 
     private AutoFitSurfaceView mSurfaceView;
     private ImageView mPictureImageView;
     private Button mRecordBtn;
     private Button mCodecBtn;
+    private Button mShowBtn;
     private Button flashOptionalBtn;
     private FocusMeteringView mFocusMeteringView;
     private FaceView mFaceView;
@@ -113,15 +127,21 @@ public class Camera1Activity extends BaseActivity
         mRecordBtn = findViewById(R.id.record_btn);
         mRecordBtn.setOnClickListener(this);
 
+        mShowBtn = findViewById(R.id.show_btn);
+        mShowBtn.setOnClickListener(this);
+
         mFocusMeteringView = findViewById(R.id.focus_metering_view);
         mFaceView = findViewById(R.id.face_view);
 
         mCameraContext = new CameraContext(this);
+        mMp4Obj = new Mp4ToNV21(Environment.getExternalStorageDirectory().getAbsolutePath() + "/rel.mp4", getCacheDir().getAbsolutePath());
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        mRelNV21List = CameraUtils.getEnumDirFileName(Environment.getExternalStorageDirectory().getAbsolutePath() + "/rel/", null);
+
         mExecutor.submit(new Runnable() {
             @Override
             public void run() {
@@ -265,6 +285,22 @@ public class Camera1Activity extends BaseActivity
                         @Override
                         public void onPreviewFrame(byte[] data) {
                             mVideoEncoder.addVideoData(data);
+
+                            //////自己添加的数据用于替换,读取目录的
+//                            int beishu = 3;  //放慢几倍
+//                            mNV21Index += 1;
+//                            if(mNV21Index / beishu > (mRelNV21List.size() -1 )){
+//                                mNV21Index = 0;
+//                            }
+//                            else{
+//                                byte[] newdata  = CameraUtils.readFileToByteArray(mRelNV21List.get(mNV21Index / beishu));
+//                                Log.e("mlog", "addVideoData, onPreviewFrame" + ",newdata:" +mRelNV21List.get(mNV21Index / beishu));
+//                                Bitmap bitmap = CameraUtils.getPriviewPic(newdata, 1920, 1080);
+//                                mPictureImageView.setImageBitmap(bitmap);
+//                                mPictureImageView.setVisibility(View.VISIBLE);
+//                            }
+
+
                         }
                     });
                     mVideoEncoder.setVideoEncodeListener(new VideoEncoder.VideoEncodeListener() {
@@ -293,7 +329,37 @@ public class Camera1Activity extends BaseActivity
                     mVideoEncoder.stop();
                 }
             }
-        } else if (v.getId() == R.id.flash_optional_btn) {
+        }else if (v.getId() == R.id.show_btn) {
+            mCameraContext.setPreviewCallback(new CameraContext.PreviewCallback(){
+
+                @Override
+                public void onPreviewFrame(byte[] data) {
+
+                    ////分析 MP4录像并将data数据替换掉,用于一些后面视频处理hook 用
+                    if(mMp4Obj.isTransformation()){
+                        int  rate = (int) (30 / mMp4Obj.mFrameRate);  //放慢几倍
+                        Log.e("mlog", "addVideoData, onPreviewFrame" + ",mMp4Obj:" + mMp4Obj.toString() + ",rate:" + rate);
+                        mNV21Index += 1;
+                        if(mNV21Index / rate > (mMp4Obj.mNV21PathList.size() -1 )){
+                            mNV21Index = 0;
+                        }
+                        else{
+                            byte[] newdata  =CameraUtils.readFileToByteArray(mMp4Obj.mNV21PathList.get(mNV21Index / rate));
+                            Log.e("mlog", "addVideoData, onPreviewFrame" + ",newdata:" + (mNV21Index / rate));
+                            Bitmap bitmap = CameraUtils.getPriviewPic(newdata, mMp4Obj.mWidth, mMp4Obj.mHight);
+                            mPictureImageView.setImageBitmap(bitmap);
+                            mPictureImageView.setVisibility(View.VISIBLE);
+                        }
+                    }
+                    else {
+                        Bitmap bmp = CameraUtils.getPriviewPic(data, mCameraContext.getPreviewWidth(), mCameraContext.getPreviewHeight());
+                        mPictureImageView.setImageBitmap(bmp);
+                        mPictureImageView.setVisibility(View.VISIBLE);
+                    }
+                }
+            });
+        }
+        else if (v.getId() == R.id.flash_optional_btn) {
             if (mCameraContext != null) {
                 String text = flashOptionalBtn.getText().toString();
                 int index = Arrays.asList(FLASH_OPTIONAL_SET).indexOf(text);
@@ -335,4 +401,6 @@ public class Camera1Activity extends BaseActivity
             }
         }
     }
+
+
 }

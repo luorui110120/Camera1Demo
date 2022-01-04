@@ -146,6 +146,9 @@ public class CameraContext extends BaseCameraContext {
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
+
+//                Log.d(TAG, "data_size: " + data.length + ",callback:" + callback + "w:" + camera.getParameters().getPreviewSize().width
+//                        + "h:" + camera.getParameters().getPreviewSize().height);
                 if (callback != null) {
                     callback.onPreviewFrame(data);
                 }
